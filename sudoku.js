@@ -1,25 +1,55 @@
-const sudoku = [];
 const sudokuString1 =
   "005809100800010005140000037300070004010406020200080001920000018400090003001307400";
-const sudokuString =
+const sudokuString2 =
   "000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+const sudokuString =
+  "920306000001024600500000001040007000103402706000100080800000002007280900000601037";
+const sudokuString3 =
+  "142976853783542619659318274297465138438129765561837942326784591815693427974251386";
 const N = 81;
 const L = 9;
-
 function mainjs() {
-  let availableRow;
-  let availableColumn;
-  let availableBox;
   let suitableIndexes = [];
+  const falselyInsertedIndexesAndNumbers = new Map();
   const sudoku = sudokuString.split("");
+  printSudoku(sudoku);
+
   for (let thatIndex = 0; thatIndex < N; thatIndex++) {
     if (sudoku[thatIndex] != 0) continue;
     suitableIndexes.push(thatIndex);
   }
-  console.log("yo! " + suitableIndexes);
-  printSudoku(sudoku.join(""));
 
-  solve(0, sudoku, 0);
+  if (suitableIndexes.length == 0) checkSudokuFinished(sudoku);
+
+  for (let index = 0; index < suitableIndexes.length; index++) {
+    let suitableIndex = suitableIndexes[index];
+    if (solve(sudoku, suitableIndex, falselyInsertedIndexesAndNumbers) == -1) {
+      // Couldn't insert number
+      // Get the index that number falsely inserted.
+      let previousIndex = index - 1;
+      let falselyInsertedIndex = suitableIndexes[previousIndex];
+      let falselyInsertedNumber = sudoku[falselyInsertedIndex];
+
+      if (falselyInsertedNumber == 0) {
+        throw new Error(
+          "Falsely inserted number is zero. This should not happen."
+        );
+      }
+      // Delete the falsely inserted number.
+      sudoku[falselyInsertedIndex] = 0 + "";
+      printSudoku(sudoku);
+
+      let falseNumbers =
+        falselyInsertedIndexesAndNumbers.get(falselyInsertedIndex);
+      if (falseNumbers == null) {
+        falseNumbers = new Set();
+      }
+      falseNumbers.add(falselyInsertedNumber);
+      falselyInsertedIndexesAndNumbers.set(falselyInsertedIndex, falseNumbers);
+      index = previousIndex - 1;
+    }
+  }
+  checkSudokuFinished(sudoku);
 }
 
 function checkRow(sud, index) {
@@ -61,6 +91,7 @@ function checkBox(sud, index) {
   divisionOfDivision = division / 3;
   divisionOfDivision = Math.floor(divisionOfDivision);
   let j = 0;
+
   for (
     let i = tmp * 3 - division * L + divisionOfDivision * L * 3;
     i < tmp * 3 - division * L + divisionOfDivision * 27 + 21;
@@ -86,6 +117,7 @@ function deleteZeros(array) {
 }
 
 function printSudoku(str) {
+  str = str.join("");
   for (let i = 0; i < L; i++) {
     console.log(str.substr(i * L, L));
     if (i % 3 === 2) {
@@ -94,48 +126,85 @@ function printSudoku(str) {
   }
 }
 
-function availableNumber(row, col, box) {
+function availableNumbers(solvedSudoku, index) {
+  const arow = checkRow(solvedSudoku, index);
+  const acol = checkColumn(solvedSudoku, index);
+  const abox = checkBox(solvedSudoku, index);
+  // Give the available numbers to try to fit.
   let everyNotpossible = [];
-  everyNotpossible = row.concat(col).concat(box);
+  everyNotpossible = arow.concat(acol).concat(abox);
   let okSet = new Set(everyNotpossible);
+
   let everyPossible = [];
   for (let i = 1; i <= 9; i++) {
-    if (!okSet.has(i)) {
+    if (!okSet.has("" + i)) {
       everyPossible.push(i);
     }
   }
   return everyPossible;
 }
 
-//TODO: what the fuck is that Can? XD
-function solve(backflag, solvedSudoku, index) {
-  if (backflag == undefined) throw "error from can: backflag is undefined";
+function solve(solvedSudoku, index, falselyInsertedIndexesAndNumbers) {
+  let availableNumbersArray = availableNumbers(solvedSudoku, index);
 
-  let unwantednum = 0;
-
-  const arow = checkRow(solvedSudoku, index);
-  const acow = checkColumn(solvedSudoku, index);
-  const abox = checkBox(solvedSudoku, index);
-  //TODO: sovle the undefined problem!!!
-  //cant remember the before number!!
-  const numbers = availableNumber(arow, acow, abox);
-
-  console.log(numbers);
-  //figure out how backflag works!!!
-  if (numbers.length == 0) {
-    // no elements to assign
-    //do recursive shit
-    console.log("going back one index");
-    unwantednum = solvedSudoku[index - 1];
-    solve(++backflag, solvedSudoku, index - 1);
-  } else {
-    const number = numbers.pop();
-    solvedSudoku[index] = number;
-    printSudoku(solvedSudoku.join(""));
-    index++;
-    solve(backflag, solvedSudoku, index);
+  let falseNumbersSetAtIndex = falselyInsertedIndexesAndNumbers.get(index);
+  if (falseNumbersSetAtIndex != undefined) {
+    let tempAvailableNumbersArray = [];
+    for (let i = 0; i < availableNumbersArray.length; i++) {
+      if (falseNumbersSetAtIndex.has(availableNumbersArray[i] + "")) {
+        continue;
+      }
+      tempAvailableNumbersArray.push(availableNumbersArray[i]);
+    }
+    availableNumbersArray = tempAvailableNumbersArray;
   }
+  if (availableNumbersArray.length == 0) {
+    if (checkSudokuFinished(solvedSudoku)) {
+      return 1;
+    }
+    for (let startIndex = index; startIndex < N; startIndex++) {
+      if (falselyInsertedIndexesAndNumbers.get(startIndex) == undefined)
+        continue;
+      falselyInsertedIndexesAndNumbers.set(startIndex, new Set());
+    }
+    return -1;
+  } else {
+    const number = availableNumbersArray.pop();
+    solvedSudoku[index] = number + "";
+    printSudoku(solvedSudoku);
+  }
+}
+function isSudokuAnswerValid(solvedSudoku) {
+  let availableNumbersArray = [];
+  for (let i = 0; i < 81; i++) {
+    availableNumbersArray = availableNumbers(solvedSudoku, i);
+    if (availableNumbersArray.length > 0) return;
+  }
+  console.log("Well done! Sudoku is valid too.");
+}
+function checkSudokuFinished(solvedSudoku) {
+  isFinished = true;
+  printSudoku(solvedSudoku);
+  for (let i = 0; i < 81; i++) {
+    if (solvedSudoku[i] == 0) return (isFinished = false);
+
+    const availableNumbersArray = availableNumbers(solvedSudoku, i);
+
+    if (
+      availableNumbersArray.length == 1 &&
+      availableNumbersArray.pop() === solvedSudoku[i]
+    ) {
+      return (isFinished = true);
+    }
+
+    if (availableNumbersArray.length !== 0) {
+      isFinished = false;
+      return isFinished;
+    }
+  }
+  console.log("Sudoku Finished!");
+  isSudokuAnswerValid(solvedSudoku);
+  return isFinished;
 }
 
 mainjs();
-//solve(1);
